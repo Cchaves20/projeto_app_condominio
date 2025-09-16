@@ -106,7 +106,6 @@ function RegisterPage() {
             return;
         }
 
-        // Monta o objeto com todos os dados para enviar ao backend
         const userData = {
             username: username,
             email: email,
@@ -115,7 +114,6 @@ function RegisterPage() {
             nome_completo: ['SINDICO', 'ENTREGADOR'].includes(accountType) ? nomeCompleto : null,
             nome_empresa: accountType === 'FORNECEDOR' ? nomeEmpresa : null,
             nome_condominio: accountType === 'SINDICO' ? nomeCondominio : null,
-            // --- ADICIONA OS DADOS DE ENDEREÇO SE FOR FORNECEDOR ---
             rua: accountType === 'FORNECEDOR' ? rua : null,
             numero: accountType === 'FORNECEDOR' ? numero : null,
             cidade: accountType === 'FORNECEDOR' ? cidade : null,
@@ -123,56 +121,59 @@ function RegisterPage() {
             cep: accountType === 'FORNECEDOR' ? cep : null,
         };
 
+        // --- ADICIONE ESTA LINHA PARA LOGAR O PAYLOAD ---
+        console.log("Payload de registro enviado:", userData);
+
         try {
-            // 1. Registro do usuário
             await api.post('/auth/register', userData);
             setSuccessMessage('Conta criada com sucesso! Realizando login...');
 
-            // 2. Preparação dos dados para o login (form-urlencoded)
             const formData = new URLSearchParams();
             formData.append('username', username);
             formData.append('password', password);
 
-            // 3. Login do usuário recém-criado
             const loginResponse = await api.post('/auth/login', formData, {
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             });
             
             const { access_token, profile } = loginResponse.data;
 
-            // Chamar a função de login do AuthContext
             login({ access: access_token }, profile);
 
-            // Redirecionamento condicional com base no tipo de usuário
             switch (profile.tipo_usuario) {
-                case 'SINDICO':
-                    navigate('/sindico'); // Rota para o painel do síndico
-                    break;
-                case 'FORNECEDOR':
-                    navigate('/fornecedor'); // Rota para o painel do fornecedor
-                    break;
-                case 'ENTREGADOR':
-                    navigate('/entregador'); // Rota para o painel do entregador
-                    break;
-                default:
-                    navigate('/dashboard'); // Rota padrão caso o tipo não seja reconhecido
-                    break;
+                case 'SINDICO': navigate('/sindico'); break;
+                case 'FORNECEDOR': navigate('/fornecedor'); break;
+                case 'ENTREGADOR': navigate('/entregador'); break;
+                default: navigate('/dashboard'); break;
             }
 
-            clearForm(); // Limpa o formulário após sucesso
+            clearForm();
 
         } catch (err) {
             let errorMessage = 'Erro ao criar conta ou fazer login. Tente novamente.';
-            if (err.response?.data?.detail) {
-                errorMessage = `Erro: ${err.response.data.detail}`;
-            } else if (err.response?.data?.error) { // Para possíveis erros do seu endpoint de login
-                errorMessage = `Erro de login: ${err.response.data.error}`;
-            } else if (err.message) {
-                errorMessage = `Erro: ${err.message}`; // Erro de rede ou Axios
+            if (err.response) {
+                // O servidor respondeu com um status code fora da faixa 2xx
+                console.error("Erro da API:", err.response.data); // <-- Log detalhado da resposta do backend
+                console.error("Status do erro:", err.response.status);
+                if (err.response.data?.detail) {
+                    errorMessage = `Erro: ${err.response.data.detail}`;
+                } else if (err.response.data) { // Se houver outros dados no corpo da resposta
+                    errorMessage = `Erro: ${JSON.stringify(err.response.data)}`;
+                } else {
+                    errorMessage = `Erro: Status ${err.response.status}`;
+                }
+            } else if (err.request) {
+                // A requisição foi feita mas não houve resposta (e.g., rede offline)
+                errorMessage = "Erro de rede: O servidor não respondeu.";
+                console.error("Erro de rede:", err.request);
+            } else {
+                // Algo mais aconteceu ao configurar a requisição
+                errorMessage = `Erro: ${err.message}`;
+                console.error("Erro Axios:", err.message);
             }
             setError(errorMessage);
-            setSuccessMessage(''); // Limpa a mensagem de sucesso se houver erro
-            console.error('Erro no processo de registro/login:', err);
+            setSuccessMessage('');
+            console.error('Erro no processo de registro/login (final):', err);
         }
     };
 

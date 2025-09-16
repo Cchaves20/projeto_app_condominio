@@ -2,21 +2,24 @@
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from datetime import timedelta # Necessário para o tempo de expiração do token
+from datetime import timedelta 
+
+# REMOVIDO: from fastapi.security import OAuth2PasswordRequestForm 
+# NÃO PRECISAMOS MAIS DESTA IMPORTAÇÃO, pois o frontend envia JSON e o backend espera um Pydantic BaseModel
 
 # Importações de utilitários de segurança
 from app.utils.auth import hash_password, verify_password, create_access_token
 # Importações de dependências personalizadas
-from app.dependencies import get_current_user, get_current_sindico, get_current_fornecedor, authenticate_user_for_token # Adicione authenticate_user_for_token
+from app.dependencies import get_current_user, get_current_sindico, get_current_fornecedor, authenticate_user_for_token 
 from app.config import settings # Para acessar ACCESS_TOKEN_EXPIRE_MINUTES
 
 # Importações de banco de dados e modelos
 from app.database.base import get_db
-from app.models.user import User, TipoUsuario # Importe os modelos necessários
+from app.models.user import User, TipoUsuario 
 
 # Importações de schemas
-# Garanta que o Login schema está definido para aceitar username e password diretamente
-from app.schemas.user import UserCreate, UserProfileResponse, Login, LoginResponse
+# Estes schemas são definidos em app/schemas/user.py e são usados para validação de entrada/saída
+from app.schemas.user import UserCreate, UserProfileResponse, Login, LoginResponse 
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -60,26 +63,26 @@ def register_user(user_data: UserCreate, db: Session = Depends(get_db)):
 # ==================== Rota de Login ====================
 @router.post("/login", response_model=LoginResponse)
 async def login_for_access_token(
-    user_credentials: Login, # Renomeado para maior clareza, esperando o schema Login
+    user_credentials: Login, # <-- CORREÇÃO: Agora espera o seu Pydantic 'Login' schema (JSON)
     db: Session = Depends(get_db)
 ):
-    # Usa a função auxiliar para autenticar o usuário
-    user = authenticate_user_for_token(db, user_credentials.username, user_credentials.password)
-    
+    # NOTA: user_credentials.username e user_credentials.password já estarão disponíveis do JSON enviado
+    user = authenticate_user_for_token(db, user_credentials.username, user_credentials.password) 
+
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Nome de usuário ou senha incorretos", # Mensagem mais amigável
+            detail="Nome de usuário ou senha incorretos",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
-    # Gera o token de acesso
+
     access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
     access_token = create_access_token(
         data={"sub": user.username}, expires_delta=access_token_expires
     )
-    
-    return {"access_token": access_token, "token_type": "bearer"}
+
+    # Retorna o token de acesso e o perfil completo do usuário
+    return {"access_token": access_token, "token_type": "bearer", "profile": user} 
 
 # ==================== Rota para obter o perfil do usuário logado ====================
 @router.get("/me", response_model=UserProfileResponse)
@@ -90,15 +93,13 @@ async def read_users_me(current_user: User = Depends(get_current_user)):
     return current_user
 
 # ==================== Exemplo de rota protegida para síndicos ====================
-@router.get("/sindico-only", response_model=UserProfileResponse) # Retornar o perfil do síndico
+@router.get("/sindico-only", response_model=UserProfileResponse) 
 async def read_sindico_info(current_sindico: User = Depends(get_current_sindico)):
     """Rota de exemplo protegida para síndicos."""
-    return current_sindico # Retorna o objeto User do síndico
-    # Ou: return {"message": f"Bem-vindo, síndico {current_sindico.username}!"}
-
+    return current_sindico 
 
 # ==================== Exemplo de rota protegida para fornecedores ====================
-@router.get("/fornecedor-only", response_model=UserProfileResponse) # Retornar o perfil do fornecedor
+@router.get("/fornecedor-only", response_model=UserProfileResponse) 
 async def read_fornecedor_info(current_fornecedor: User = Depends(get_current_fornecedor)):
     """Rota de exemplo protegida para fornecedores."""
     return current_fornecedor

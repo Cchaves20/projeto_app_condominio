@@ -2,7 +2,7 @@
 
 from typing import Optional
 from pydantic import BaseModel, EmailStr, Field
-from app.models.user import TipoUsuario # Importe o enum TipoUsuario
+from app.models.user import TipoUsuario, User # Importe o enum TipoUsuario (se User for de outro modulo)
 
 # Schema para criação de usuário (registro)
 class UserCreate(BaseModel):
@@ -16,7 +16,7 @@ class UserCreate(BaseModel):
     rua: Optional[str] = Field(None, max_length=255)
     numero: Optional[str] = Field(None, max_length=20)
     cidade: Optional[str] = Field(None, max_length=100)
-    estado: Optional[str] = Field(None, max_length=50)
+    estado: Optional[str] = Field(None, max_length=50) 
     cep: Optional[str] = Field(None, max_length=9)
 
 # Schema para a resposta do perfil do usuário (omitindo a senha)
@@ -31,22 +31,22 @@ class UserProfileResponse(BaseModel):
     rua: Optional[str] = None
     numero: Optional[str] = None
     cidade: Optional[str] = None
-    estado: Optional[str] = None
+    estado: Optional[str] = None 
     cep: Optional[str] = None
 
     class Config:
-        from_attributes = True # ou orm_mode = True para Pydantic < 2.0
-
+        from_attributes = True # Para Pydantic v2+
+        # orm_mode = True # Para Pydantic v1.x, se ainda estiver usando
 
 # NOVO: Schema para a entrada de login
 class Login(BaseModel):
     username: str
     password: str
 
-# NOVO: Schema para a resposta após o login (contém o token)
 class LoginResponse(BaseModel):
     access_token: str
-    token_type: str = "bearer"
+    token_type: str
+    profile: UserProfileResponse
 
 # Schema para atualização de usuário (se você tiver uma rota de atualização)
 class UserUpdate(BaseModel):

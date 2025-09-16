@@ -1,44 +1,40 @@
 # backend/app/main.py
 
+import os # <-- Garanta que 'os' está importado
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware 
+from fastapi.middleware.cors import CORSMiddleware
+from app.routes import auth, products, favorites, cart
+from app.database.base import SQLALCHEMY_DATABASE_URL
 
-from app.database.base import engine, Base, get_db
+# --- ADICIONE ESTAS DUAS LINHAS LOGO AQUI ---
+print(f"DEBUG (main.py): SQLALCHEMY_DATABASE_URL sendo usada: {SQLALCHEMY_DATABASE_URL}")
+print(f"DEBUG (main.py): Valor de DATABASE_URL do ambiente: {os.getenv('DATABASE_URL')}")
+# --- FIM DAS LINHAS ADICIONADAS ---
 
-# Importe suas rotas
-from app.routes import auth, products, favorites, cart # Suas rotas existentes
-from app.routes import addresses # <-- Adicione esta importação
+app = FastAPI(title="API Condomínio")
 
-app = FastAPI()
-
-@app.on_event("startup")
-async def startup_event():
-    print("DEBUG: Executando startup_event...") # <-- Adicione este print
-    # Isso garante que todas as tabelas baseadas em seus modelos são criadas
-    Base.metadata.create_all(bind=engine)
-    print("DEBUG: Tabelas do banco de dados verificadas/criadas.") # <-- Adicione este print
-
-# --- Configuração CORS (já deve estar aqui) ---
+# Configuração CORS - VERIFIQUE ISTO
 origins = [
     "http://localhost",
-    "http://localhost:5173",  
+    "http://localhost:5173",  # Seu frontend Vite/React
+    "http://127.0.0.1:8000",
+    "http://127.0.0.1:5173",  # Outra forma de referenciar o localhost
+    # Adicione outros domínios de frontend permitidos aqui se necessário
 ]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"], 
-    allow_headers=["*"], 
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
-# --- Fim da configuração CORS ---
 
-# Inclua suas rotas
+# Incluir routers
 app.include_router(auth.router, prefix="/api")
 app.include_router(products.router, prefix="/api")
 app.include_router(favorites.router, prefix="/api")
 app.include_router(cart.router, prefix="/api")
-app.include_router(addresses.router, prefix="/api") # <-- Adicione esta linha
 
 @app.get("/")
 async def root():
