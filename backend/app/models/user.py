@@ -92,14 +92,17 @@ class Endereco(Base):
     apelido = Column(String(50))
     rua = Column(String(255))
     numero = Column(String(20))
+    
+    # --- GARANTA QUE ESTA LINHA ESTÁ AQUI ---
+    bairro = Column(String(100), nullable=False)
+    
     cidade = Column(String(100))
     estado = Column(String(50))
     cep = Column(String(9))
     complemento = Column(String(255), nullable=True)
     
-    # Relação com User
     user = relationship("User", back_populates="enderecos")
-
+    
 
 class Produto(Base):
     __tablename__ = "produtos"
@@ -133,7 +136,6 @@ class Produto(Base):
         cascade="all, delete-orphan",
         overlaps="favorito_para" # Adicionado para resolver SAWarning
     )
-
 
 class Pedido(Base):
     __tablename__ = "pedidos"

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import api from '../api';
+import apiClient from '../api/apiClient';
 import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -26,7 +26,7 @@ const MapaRastreamento = ({ pedido }) => {
     useEffect(() => {
         const getCoordsEntrega = async () => {
             try {
-                const res = await api.get(`/geocode/?address=${pedido.rua},${pedido.numero},${pedido.cep}`);
+                const res = await apiClient.get(`/geocode/?address=${pedido.rua},${pedido.numero},${pedido.cep}`);
                 setPosicaoEntrega([res.data.lat, res.data.lon]);
             } catch {
                 console.error("Não foi possível geocodificar o endereço de entrega.");
@@ -40,11 +40,11 @@ const MapaRastreamento = ({ pedido }) => {
 
         const buscarLocalizacaoERota = async () => {
             try {
-                const resLoc = await api.get(`/entregador/localizacao/${pedido.entregador.id}/`);
+                const resLoc = await apiClient.get(`/entregador/localizacao/${pedido.entregador.id}/`);
                 const posEntregador = [resLoc.data.latitude, resLoc.data.longitude];
                 setPosicaoEntregador(posEntregador);
 
-                const resRota = await api.post('/rota-simples/', {
+                const resRota = await apiClient.post('/rota-simples/', {
                     ponto_a: [posEntregador[1], posEntregador[0]], // lon, lat
                     ponto_b: [posicaoEntrega[1], posicaoEntrega[0]], // lon, lat
                 });
@@ -92,7 +92,7 @@ function HistoricoPedidosPage() {
     const fetchPedidos = useCallback(async () => {
         setLoading(true);
         try {
-            const response = await api.get('/pedidos/');
+            const response = await apiClient.get('/pedidos/');
             setPedidos(response.data);
         } catch (err) {
             setError('Não foi possível carregar o histórico de pedidos.');

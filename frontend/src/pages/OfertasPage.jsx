@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import api from '../api';
+import apiClient from '../api/apiClient';
 import { useAuth } from '../context/AuthContext';
 import ProductCard from '../components/ProductCard';
 
@@ -49,8 +49,8 @@ function OfertasPage() {
         setLoading(true);
         try {
             const [ofertasResponse, favoritosResponse] = await Promise.all([
-                api.get('/produtos/?em_oferta=true'),
-                api.get('/favoritos/')
+                apiClient.get('/produtos/?em_oferta=true'),
+                apiClient.get('/favoritos/')
             ]);
             setOfertas(ofertasResponse.data);
 
@@ -77,7 +77,7 @@ function OfertasPage() {
 
     const handleAdicionarAoCarrinho = async (produtoId) => {
         try {
-            await api.post('/carrinhos/adicionar_item/', { produto_id: produtoId, quantidade: 1 });
+            await apiClient.post('/carrinhos/adicionar_item/', { produto_id: produtoId, quantidade: 1 });
             alert('Produto adicionado ao carrinho!');
         } catch (err) {
             alert('Erro ao adicionar produto ao carrinho.');
@@ -87,7 +87,7 @@ function OfertasPage() {
 
     const handleAlternarFavorito = async (produtoId) => {
         try {
-            await api.post('/favoritos/alternar_favorito/', { produto_id: produtoId });
+            await apiClient.post('/favoritos/alternar_favorito/', { produto_id: produtoId });
             setFavoritosIds(prevIds => {
                 const newIds = new Set(prevIds);
                 if (newIds.has(produtoId)) {

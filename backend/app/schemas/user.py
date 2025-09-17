@@ -1,7 +1,7 @@
 # backend/app/schemas/user.py
 
 from typing import Optional
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from app.models.user import TipoUsuario, User # Importe o enum TipoUsuario (se User for de outro modulo)
 
 # Schema para criação de usuário (registro)
@@ -71,3 +71,14 @@ class UserProfile(BaseModel):
     username: str
     email: str
     tipo_usuario: str
+
+class UserSimpleResponse(BaseModel):
+    """
+    Um schema simplificado para retornar apenas informações básicas do usuário.
+    """
+    id: int
+    username: str
+    nome_completo: str | None = None # Usando | None para campos opcionais
+
+    # Permite que o Pydantic leia os dados de um objeto SQLAlchemy
+    model_config = ConfigDict(from_attributes=True)

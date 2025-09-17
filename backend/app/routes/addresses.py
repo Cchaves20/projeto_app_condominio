@@ -1,84 +1,72 @@
 # backend/app/routes/addresses.py
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response
 from sqlalchemy.orm import Session
 from typing import List
 
-from app.database.connection import get_db
-from app.schemas.address import AddressCreate, Address  # Você precisará criar estes schemas
-from app.models.address import Address as DBAddress # Modelo do SQLAlchemy
-from app.dependencies import get_current_user # Para proteger a rota
+# Importações corrigidas e centralizadas
+from app.dependencies import get_db, get_current_user
+from app.models.user import User
+from app.schemas.address import Address, AddressCreate
+from app.crud import crud_address
 
 router = APIRouter(
-    prefix="/addresses", # O prefixo para as rotas de endereço
+    prefix="/enderecos", # <-- Alterado para português, para consistência com a API
     tags=["Endereços"],
 )
 
-# Rota para criar um novo endereço
 @router.post("/", response_model=Address, status_code=status.HTTP_201_CREATED)
 def create_address(
-    address: AddressCreate, 
-    current_user: dict = Depends(get_current_user), # Exige autenticação
-    db: Session = Depends(get_db)
+    address: AddressCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user) # <-- Corrigido: o tipo é 'User', não 'dict'
 ):
-    db_address = DBAddress(**address.model_dump(), user_id=current_user["id"]) # Assume que o Address tem user_id
-    db.add(db_address)
-    db.commit()
-    db.refresh(db_address)
-    return db_address
+    """Cria um novo endereço para o usuário logado."""
+    return crud_address.create_user_address(db=db, address=address, user_id=current_user.id)
 
-# Rota para obter todos os endereços do usuário logado
 @router.get("/", response_model=List[Address])
 def get_user_addresses(
-    current_user: dict = Depends(get_current_user), # Exige autenticação
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user) # <-- Corrigido: o tipo é 'User', não 'dict'
 ):
-    addresses = db.query(DBAddress).filter(DBAddress.user_id == current_user["id"]).all()
-    return addresses
+    """Retorna todos os endereços do usuário logado."""
+    return crud_address.get_addresses_by_user(db=db, user_id=current_user.id)
 
-# Rota para obter um endereço específico por ID
 @router.get("/{address_id}", response_model=Address)
 def get_address(
-    address_id: int, 
-    current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    address_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    db_address = db.query(DBAddress).filter(DBAddress.id == address_id, DBAddress.user_id == current_user["id"]).first()
+    """Retorna um endereço específico do usuário."""
+    db_address = crud_address.get_address_by_id(db=db, address_id=address_id, user_id=current_user.id)
     if db_address is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Endereço não encontrado ou não pertence ao usuário")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Endereço não encontrado")
     return db_address
 
-# Rota para atualizar um endereço
 @router.put("/{address_id}", response_model=Address)
 def update_address(
-    address_id: int, 
-    address_update: AddressCreate, # Ou um schema AddressUpdate mais específico
-    current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    address_id: int,
+    address_update: AddressCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    db_address = db.query(DBAddress).filter(DBAddress.id == address_id, DBAddress.user_id == current_user["id"]).first()
+    """Atualiza um endereço do usuário."""
+    db_address = crud_address.get_address_by_id(db=db, address_id=address_id, user_id=current_user.id)
     if db_address is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Endereço não encontrado ou não pertence ao usuário")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Endereço não encontrado")
     
-    for key, value in address_update.model_dump(exclude_unset=True).items():
-        setattr(db_address, key, value)
-    
-    db.add(db_address)
-    db.commit()
-    db.refresh(db_address)
-    return db_address
+    return crud_address.update_address(db=db, db_address=db_address, address_update=address_update)
 
-# Rota para deletar um endereço
 @router.delete("/{address_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_address(
-    address_id: int, 
-    current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    address_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    db_address = db.query(DBAddress).filter(DBAddress.id == address_id, DBAddress.user_id == current_user["id"]).first()
-    if db_address is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Endereço não encontrado ou não pertence ao usuário")
-    
-    db.delete(db_address)
-    db.commit()
-    return {"message": "Endereço deletado com sucesso"}
+    """Deleta um endereço do usuário."""
+    db_address = crud_address.get_address_by_id(db=db, address_id=address_id, user_id=current_user.id)
+    if db_address:
+        crud_address.delete_address(db=db, db_address=db_address)
+    # A resposta para 204 No Content não deve ter corpo
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

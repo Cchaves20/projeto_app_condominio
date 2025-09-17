@@ -1,7 +1,7 @@
 // frontend/src/pages/ProductsPage.jsx
 
 import React, { useState, useEffect, useCallback } from 'react';
-import api from '../api';
+import apiClient from '../api/apiClient';
 import { useAuth } from '../context/AuthContext';
 import ProductCard from '../components/ProductCard';
 
@@ -57,11 +57,11 @@ function ProductsPage() {
                 queryParams.search = searchTerm;
             }
 
-            const productsResponse = await api.get('/produtos', { params: queryParams });
+            const productsResponse = await apiClient.get('/produtos', { params: queryParams });
             setProducts(productsResponse.data);
 
             if (userType === 'SINDICO') {
-                const favoritesResponse = await api.get('/favoritos');
+                const favoritesResponse = await apiClient.get('/favoritos');
                 const favs = {};
                 // CORREÇÃO AQUI: Acessar response.data corretamente
                 if (Array.isArray(favoritesResponse.data) && favoritesResponse.data.length > 0 && favoritesResponse.data[0].produtos) {
@@ -93,7 +93,7 @@ function ProductsPage() {
         setError('');
         setSuccessMessage('');
         try {
-            await api.post('/favoritos/alternar_favorito/', { produto_id: productId });
+            await apiClient.post('/favoritos/alternar_favorito/', { produto_id: productId });
             setFavoriteProducts(prev => ({
                 ...prev,
                 [productId]: !prev[productId]
@@ -109,7 +109,7 @@ function ProductsPage() {
         setError('');
         setSuccessMessage('');
         try {
-            await api.post('/carrinhos/adicionar_item/', { produto_id: productId, quantidade: 1 });
+            await apiClient.post('/carrinhos/adicionar_item/', { produto_id: productId, quantidade: 1 });
             setSuccessMessage('Item adicionado ao carrinho!');
         } catch (err) {
             setError('Erro ao adicionar item ao carrinho.');

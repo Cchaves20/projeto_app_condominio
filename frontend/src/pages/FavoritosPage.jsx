@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import api from '../api';
+import apiClient from '../api/apiClient';
 import { useAuth } from '../context/AuthContext';
 import ProductCard from '../components/ProductCard';
 
@@ -46,7 +46,7 @@ function FavoritosPage() {
         if (!accessToken) return;
         setLoading(true);
         try {
-            const response = await api.get('/favoritos/');
+            const response = await apiClient.get('/favoritos/');
             // CORREÇÃO AQUI: Acessar response.data corretamente
             if (Array.isArray(response.data) && response.data.length > 0 && response.data[0].produtos) {
                 setFavoritos(response.data[0].produtos);
@@ -69,7 +69,7 @@ function FavoritosPage() {
 
     const handleRemoverDosFavoritos = async (produtoId) => {
         try {
-            await api.post('/favoritos/alternar_favorito/', { produto_id: produtoId });
+            await apiClient.post('/favoritos/alternar_favorito/', { produto_id: produtoId });
             setFavoritos(prevFavoritos => prevFavoritos.filter(p => p.id !== produtoId));
             alert('Produto removido dos favoritos.');
         } catch (err) {
@@ -80,7 +80,7 @@ function FavoritosPage() {
 
     const handleAdicionarAoCarrinho = async (produtoId) => {
         try {
-            await api.post('/carrinhos/adicionar_item/', { produto_id: produtoId, quantidade: 1 });
+            await apiClient.post('/carrinhos/adicionar_item/', { produto_id: produtoId, quantidade: 1 });
             alert('Produto adicionado ao carrinho com sucesso!');
         } catch (err) {
             alert('Erro ao adicionar produto ao carrinho.');

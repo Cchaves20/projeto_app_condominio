@@ -1,25 +1,24 @@
 # backend/app/main.py
 
-import os # <-- Garanta que 'os' está importado
-from fastapi import FastAPI
+import os
+from fastapi import FastAPI, APIRouter # <-- Importe o APIRouter
 from fastapi.middleware.cors import CORSMiddleware
-from app.routes import auth, products, favorites, cart
-from app.database.base import SQLALCHEMY_DATABASE_URL
+# Importe seus roteadores de funcionalidade
+from app.routes import auth, products, favorites, cart, pedidos, addresses # <-- Adicionei 'pedidos' que criamos
+# A URL do banco não deve ser importada aqui, ela deve ser usada dentro de 'database'
+# from app.database.base import SQLALCHEMY_DATABASE_URL # <-- REMOVA ESTA LINHA
 
-# --- ADICIONE ESTAS DUAS LINHAS LOGO AQUI ---
-print(f"DEBUG (main.py): SQLALCHEMY_DATABASE_URL sendo usada: {SQLALCHEMY_DATABASE_URL}")
-print(f"DEBUG (main.py): Valor de DATABASE_URL do ambiente: {os.getenv('DATABASE_URL')}")
-# --- FIM DAS LINHAS ADICIONADAS ---
+app = FastAPI(
+    title="API Condomínio",
+    description="API para gerenciar as operações do condomínio, fornecedores e entregadores.",
+    version="1.0.0"
+)
 
-app = FastAPI(title="API Condomínio")
-
-# Configuração CORS - VERIFIQUE ISTO
+# --- Configuração do CORS (Correto) ---
 origins = [
-    "http://localhost",
-    "http://localhost:5173",  # Seu frontend Vite/React
-    "http://127.0.0.1:8000",
-    "http://127.0.0.1:5173",  # Outra forma de referenciar o localhost
-    # Adicione outros domínios de frontend permitidos aqui se necessário
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    # Você pode remover os outros se não forem necessários
 ]
 
 app.add_middleware(
@@ -30,12 +29,29 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Incluir routers
-app.include_router(auth.router, prefix="/api")
-app.include_router(products.router, prefix="/api")
-app.include_router(favorites.router, prefix="/api")
-app.include_router(cart.router, prefix="/api")
+# --- CORREÇÃO: Agrupando Rotas sob um Roteador Principal ---
 
-@app.get("/")
+# 1. Crie um roteador principal para a API
+api_router = APIRouter()
+
+# 2. Inclua todos os seus roteadores de funcionalidades NELE, sem o prefixo "/api"
+#    Eles já têm seus próprios prefixos (ex: "/auth", "/products").
+api_router.include_router(auth.router)
+api_router.include_router(products.router)
+api_router.include_router(favorites.router)
+api_router.include_router(cart.router)
+api_router.include_router(pedidos.router)
+api_router.include_router(addresses.router)
+
+# 3. Inclua o roteador principal na aplicação com o prefixo global "/api"
+app.include_router(api_router, prefix="/api")
+
+# --- Rota Raiz (Opcional) ---
+@app.get("/", tags=["Root"])
 async def root():
     return {"message": "Bem-vindo à API do Condomínio!"}
+
+# Seus prints de debug para verificar a URL do banco podem continuar aqui se precisar
+# Lembre-se de importar a variável de um arquivo de configuração, não do 'base.py'
+# Ex: from app.config import settings
+# print(f"DEBUG: DATABASE_URL = {settings.database_url}")

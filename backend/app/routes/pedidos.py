@@ -1,53 +1,59 @@
 # backend/app/routes/pedidos.py
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
-from app.database.connection import get_db
-from app.models.user import User, Pedido # Importe seus modelos
-from app.utils.auth import get_current_user
-# Futuramente, você criará schemas para os pedidos
-# from app.schemas.pedido import PedidoResponse 
+from app.dependencies import get_db, get_current_user
+# --- CORREÇÃO FINAL AQUI ---
+# Importando as classes 'User' e 'TipoUsuario' diretamente de seu arquivo
+from app.models.user import User, TipoUsuario
+from app.schemas.pedido import Pedido
+from app.crud import crud_pedido
 
 router = APIRouter(
-    # Vamos manter o prefixo genérico aqui
     prefix="/pedidos",
     tags=["Pedidos"]
 )
 
-# Rota para listar pedidos (ex: GET /api/pedidos/?status=A_CAMINHO)
-@router.get("/")
-def listar_pedidos(status: Optional[str] = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+@router.get("/", response_model=List[Pedido])
+def listar_pedidos_do_usuario(
+    status: Optional[str] = None,
+    db: Session = Depends(get_db),
+    # Usando a classe 'User' importada diretamente como type hint
+    current_user: User = Depends(get_current_user)
+):
     """
-    Lista pedidos baseados em filtros e no tipo de usuário.
+    Lista os pedidos associados ao usuário logado.
     """
-    print(f"Buscando pedidos com status: {status} para o usuário {current_user.username}")
-    
-    # Aqui virá a lógica para buscar no banco de dados.
-    # Por agora, retornamos uma lista vazia para o endpoint funcionar.
-    return []
+    if current_user.tipo_usuario == TipoUsuario.SINDICO:
+        pedidos = crud_pedido.get_pedidos_by_sindico(
+            db=db, sindico_id=current_user.id, status=status
+        )
+    elif current_user.tipo_usuario == TipoUsuario.ENTREGADOR:
+        pedidos = crud_pedido.get_pedidos_by_entregador(
+            db=db, entregador_id=current_user.id, status=status
+        )
+    else:
+        pedidos = []
 
-# --- NOVA ROTA ADICIONADA ---
-# Esta é a rota que seu EntregadorDashboard estava procurando.
-# Note que o prefixo "/pedidos" do router NÃO se aplica aqui, pois o path começa com '/'.
-# Para manter a consistência, vamos criar um router separado para isso.
-# A melhor abordagem é criar um novo router para o entregador.
+    return pedidos
 
-# Vamos criar um novo router para as funcionalidades do entregador
-entregador_router = APIRouter(
-    prefix="/pedidos-disponiveis",
-    tags=["Entregador"]
-)
 
-@entregador_router.get("/")
-def listar_pedidos_disponiveis(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+@router.get("/disponiveis", response_model=List[Pedido])
+def listar_pedidos_disponiveis_para_entrega(
+    db: Session = Depends(get_db),
+    # Usando a classe 'User' importada diretamente como type hint
+    current_user: User = Depends(get_current_user)
+):
     """
-    Lista todos os pedidos que estão com status "PRONTO_PARA_RETIRADA".
+    Endpoint exclusivo para ENTREGADORES.
     """
-    # Lógica para buscar os pedidos no banco de dados virá aqui.
-    # Por agora, retornamos uma lista vazia para resolver o 404.
-    print(f"Entregador {current_user.username} está buscando pedidos disponíveis.")
-    return []
+    if current_user.tipo_usuario != TipoUsuario.ENTREGADOR:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acesso não autorizado. Apenas entregadores podem ver os pedidos disponíveis."
+        )
 
-# --- ATUALIZAÇÃO NO MAIN.PY É NECESSÁRIA ---
+    pedidos = crud_pedido.get_pedidos_disponiveis(db=db)
+    return pedidos

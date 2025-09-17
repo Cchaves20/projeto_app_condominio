@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import api from '../api';
+import apiClient from '../api/apiClient';
 import { useAuth } from '../context/AuthContext';
 
 function CarrinhoPage() {
@@ -20,8 +20,8 @@ function CarrinhoPage() {
         setLoading(true);
         try {
             const [carrinhoRes, enderecosRes] = await Promise.all([
-                api.get('/carrinhos/'),
-                api.get('/enderecos/')
+                apiClient.get('/carrinhos/'),
+                apiClient.get('/enderecos/')
             ]);
             if (carrinhoRes.data.length > 0) setCarrinho(carrinhoRes.data[0]);
             setEnderecosSalvos(enderecosRes.data);
@@ -57,7 +57,7 @@ function CarrinhoPage() {
             return handleRemoverItem(itemId);
         }
         try {
-            await api.patch('/carrinhos/atualizar_item/', { 
+            await apiClient.patch('/carrinhos/atualizar_item/', { 
                 item_id: itemId, 
                 quantidade: novaQuantidade 
             });
@@ -70,7 +70,7 @@ function CarrinhoPage() {
 
     const handleRemoverItem = async (itemId) => {
         try {
-            await api.post('/carrinhos/remover_item/', { item_id: itemId });
+            await apiClient.post('/carrinhos/remover_item/', { item_id: itemId });
             fetchData();
         } catch (err) {
             alert('Erro ao remover o item.');
@@ -91,7 +91,7 @@ function CarrinhoPage() {
         if (window.confirm(`Confirmar pedido para: ${rua}, ${numero}?`)) {
             try {
                 // CORREÇÃO: Envia a nova estrutura de endereço para a API
-                await api.post('/carrinhos/finalizar_compra/', { 
+                await apiClient.post('/carrinhos/finalizar_compra/', { 
                     rua, 
                     numero, 
                     cep, 
