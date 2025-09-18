@@ -1,7 +1,7 @@
 // frontend/src/pages/FornecedorDashboard.jsx
 
 import React, { useState, useEffect, useCallback } from 'react';
-import api from '../api';
+import apiClient from '../api/apiClient';
 import { useAuth } from '../context/AuthContext';
 import ProductCard from '../components/ProductCard'; // <-- IMPORTE O NOVO COMPONENTE
 
@@ -49,7 +49,6 @@ const cancelButtonStyles = {
 // --- FIM DOS ESTILOS ---
 
 function FornecedorDashboard() {
-    // ... (restante do seu componente - states, useEffect, handleInputChange, handleImageUpload) ...
     const { userProfile } = useAuth();
     const [produtos, setProdutos] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -75,15 +74,12 @@ function FornecedorDashboard() {
         setLoading(true);
         setError('');
         try {
-            let queryParams = {};
-            if (searchTerm) {
-                queryParams.search = searchTerm;
-            }
-            if (availabilityFilter !== 'all') {
-                queryParams.availability = availabilityFilter === 'true';
-            }
-
-            const response = await api.get('/produtos', { params: queryParams });
+            const response = await apiClient.get('/produtos', { 
+                params: {
+                    search: searchTerm || undefined,
+                    disponivel: availabilityFilter === 'all' ? undefined : availabilityFilter === 'true'
+                } 
+            });
             setProdutos(response.data);
         } catch (err) {
             setError('Erro ao carregar produtos.');
@@ -97,47 +93,33 @@ function FornecedorDashboard() {
         fetchProdutos();
     }, [fetchProdutos]);
 
-
     const handleInputChange = (e) => {
         const { name, value, type, checked } = e.target;
-
         setCurrentProduct(prev => {
-            let newValue = value;
+            const newValue = type === 'checkbox' ? checked : value;
+            const updatedProduct = { ...prev, [name]: newValue };
 
-            if (type === 'checkbox') {
-                newValue = checked;
-                if (name === 'em_oferta' && !checked) {
-                    return {
-                        ...prev,
-                        [name]: newValue,
-                        preco_oferta: null
-                    };
-                }
-            } else if (name === 'preco' || name === 'preco_oferta') {
-                newValue = value === '' ? null : parseFloat(value);
+            if (name === 'em_oferta' && !checked) {
+                updatedProduct.preco_oferta = null;
             }
-
-            return {
-                ...prev,
-                [name]: newValue
-            };
+            if ((name === 'preco' || name === 'preco_oferta') && value === '') {
+                updatedProduct[name] = null;
+            }
+            return updatedProduct;
         });
     };
 
     const handleImageUpload = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
-
         const formData = new FormData();
         formData.append('file', file);
-
         try {
-            const response = await api.post('/upload/image', formData, {
-                headers: {
-                    'Content-Type': 'multipart/form-data'
-                }
+            const response = await apiClient.post('/upload/image', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
             });
-            setCurrentProduct(prev => ({ ...prev, imagem_url: response.data.url }));
+            // CORREÇÃO: O backend retorna 'file_path', não 'url'.
+            setCurrentProduct(prev => ({ ...prev, imagem_url: response.data.file_path }));
             setSuccessMessage('Imagem carregada com sucesso!');
         } catch (err) {
             setError('Erro ao carregar imagem.');
@@ -145,34 +127,28 @@ function FornecedorDashboard() {
         }
     };
 
-
     const handleCreateUpdateProduct = async (e) => {
         e.preventDefault();
         setError('');
         setSuccessMessage('');
 
-        const productData = { ...currentProduct };
-
-        if (productData.em_oferta) {
-            if (productData.preco_oferta === null || isNaN(productData.preco_oferta) || parseFloat(productData.preco_oferta) >= parseFloat(productData.preco)) {
-                setError('O preço de oferta deve ser um número válido e menor que o preço normal quando o produto está em oferta.');
-                return;
-            }
-        } else {
-            productData.preco_oferta = null;
-        }
+        const productData = {
+            ...currentProduct,
+            preco: parseFloat(currentProduct.preco),
+            preco_oferta: currentProduct.em_oferta ? parseFloat(currentProduct.preco_oferta) : null,
+        };
         
-        if (productData.preco === null || isNaN(productData.preco)) {
-            setError('O preço do produto é obrigatório.');
+        if (productData.em_oferta && (!productData.preco_oferta || productData.preco_oferta >= productData.preco)) {
+            setError('O preço de oferta deve ser menor que o preço normal.');
             return;
         }
 
         try {
             if (editingProductId) {
-                await api.patch(`/produtos/${editingProductId}`, productData);
+                await apiClient.patch(`/produtos/${editingProductId}`, productData);
                 setSuccessMessage('Produto atualizado com sucesso!');
             } else {
-                await api.post('/produtos', productData);
+                await apiClient.post('/produtos', productData);
                 setSuccessMessage('Produto criado com sucesso!');
             }
             setEditingProductId(null);
@@ -183,41 +159,49 @@ function FornecedorDashboard() {
             fetchProdutos();
         } catch (err) {
             const errorMsg = err.response?.data?.detail || 'Erro ao salvar produto.';
-            if (Array.isArray(errorMsg)) {
-                setError(errorMsg.map(e => `${e.loc.join('.')} - ${e.msg}`).join('; '));
-            } else {
-                setError(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
-            }
+            setError(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
             console.error(err);
         }
     };
-
+    
     const handleEditClick = (product) => {
         setEditingProductId(product.id);
-        setCurrentProduct({
-            nome: product.nome,
-            descricao: product.descricao,
-            unidade_medida: product.unidade_medida,
-            preco: product.preco,
-            disponivel: product.disponivel,
-            em_oferta: product.em_oferta,
-            preco_oferta: product.preco_oferta || null,
-            imagem_url: product.imagem_url || ''
-        });
+        setCurrentProduct({ ...product, preco_oferta: product.preco_oferta || null });
     };
 
     const handleDeleteProduct = async (productId) => {
         if (window.confirm("Tem certeza que deseja deletar este produto?")) {
-            setError('');
-            setSuccessMessage('');
             try {
-                await api.delete(`/produtos/${productId}`);
+                await apiClient.delete(`/produtos/${productId}`);
                 setSuccessMessage('Produto deletado com sucesso!');
                 fetchProdutos();
             } catch (err) {
                 setError('Erro ao deletar produto.');
                 console.error(err);
             }
+        }
+    };
+
+    const handleToggleAvailability = async (productId, currentStatus) => {
+        setError('');
+        setSuccessMessage('');
+        try {
+            // Chama o endpoint PATCH que criamos no backend
+            const response = await apiClient.patch(`/produtos/${productId}/availability`, {
+                disponivel: !currentStatus 
+            });
+
+            // Atualiza a lista de produtos na tela para refletir a mudança instantaneamente
+            setProdutos(prevProdutos => 
+                prevProdutos.map(p => 
+                    p.id === productId ? response.data : p
+                )
+            );
+            setSuccessMessage(`Produto ${response.data.disponivel ? 'disponibilizado' : 'indisponibilizado'} com sucesso!`);
+
+        } catch (err) {
+            setError('Erro ao alterar a disponibilidade do produto.');
+            console.error(err);
         }
     };
 
@@ -228,148 +212,69 @@ function FornecedorDashboard() {
             <h2>Painel do Fornecedor: {userProfile?.nome_empresa || userProfile?.nome_completo}</h2>
 
             <h3>{editingProductId ? 'Editar Produto' : 'Adicionar Novo Produto'}</h3>
-            {/* ... SEU FORMULÁRIO DE ADICIONAR/EDITAR PRODUTO VAI AQUI (INALTERADO) ... */}
             <form onSubmit={handleCreateUpdateProduct} style={{ marginBottom: '30px', padding: '15px', border: '1px solid #ccc', borderRadius: '5px' }}>
-                <input
-                    type="text"
-                    name="nome"
-                    value={currentProduct.nome}
-                    onChange={handleInputChange}
-                    placeholder="Nome do Produto"
-                    required
-                    style={formInputStyles}
-                />
-                <textarea
-                    name="descricao"
-                    value={currentProduct.descricao}
-                    onChange={handleInputChange}
-                    placeholder="Descrição do Produto"
-                    style={formInputStyles}
-                />
-                <input
-                    type="text"
-                    name="unidade_medida"
-                    value={currentProduct.unidade_medida}
-                    onChange={handleInputChange}
-                    placeholder="Unidade de Medida (ex: kg, un, litro)"
-                    required
-                    style={formInputStyles}
-                />
-                <input
-                    type="number"
-                    name="preco"
-                    value={currentProduct.preco}
-                    onChange={handleInputChange}
-                    placeholder="Preço"
-                    step="0.01"
-                    required
-                    style={formInputStyles}
-                />
+                <input type="text" name="nome" value={currentProduct.nome} onChange={handleInputChange} placeholder="Nome do Produto" required style={formInputStyles} />
+                <textarea name="descricao" value={currentProduct.descricao} onChange={handleInputChange} placeholder="Descrição do Produto" style={formInputStyles} />
+                <input type="text" name="unidade_medida" value={currentProduct.unidade_medida} onChange={handleInputChange} placeholder="Unidade (ex: kg, un, litro)" required style={formInputStyles} />
+                <input type="number" name="preco" value={currentProduct.preco} onChange={handleInputChange} placeholder="Preço" step="0.01" required style={formInputStyles} />
+                
                 <div>
-                    <label style={{ display: 'block', marginBottom: '10px' }}>
-                        Disponível:
-                        <input
-                            type="checkbox"
-                            name="disponivel"
-                            checked={currentProduct.disponivel}
-                            onChange={handleInputChange}
-                            style={{ marginLeft: '5px' }}
-                        />
-                    </label>
+                    <label><input type="checkbox" name="disponivel" checked={currentProduct.disponivel} onChange={handleInputChange} /> Disponível</label>
                 </div>
                 <div>
-                    <label style={{ display: 'block', marginBottom: '10px' }}>
-                        Em Oferta:
-                        <input
-                            type="checkbox"
-                            name="em_oferta"
-                            checked={currentProduct.em_oferta}
-                            onChange={handleInputChange}
-                            style={{ marginLeft: '5px' }}
-                        />
-                    </label>
+                    <label><input type="checkbox" name="em_oferta" checked={currentProduct.em_oferta} onChange={handleInputChange} /> Em Oferta</label>
                 </div>
+                
                 {currentProduct.em_oferta && (
-                    <input
-                        type="number"
-                        name="preco_oferta"
-                        value={currentProduct.preco_oferta !== null ? currentProduct.preco_oferta : ''}
-                        onChange={handleInputChange}
-                        placeholder="Preço de Oferta"
-                        step="0.01"
-                        required={currentProduct.em_oferta}
-                        style={formInputStyles}
-                    />
+                    <input type="number" name="preco_oferta" value={currentProduct.preco_oferta ?? ''} onChange={handleInputChange} placeholder="Preço de Oferta" step="0.01" required={currentProduct.em_oferta} style={formInputStyles} />
                 )}
-                <div style={{ marginBottom: '10px' }}>
-                    <label style={{ display: 'block', marginBottom: '5px' }}>Imagem do Produto:</label>
-                    <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleImageUpload}
-                        style={{ marginBottom: '5px' }}
-                    />
+                
+                <div>
+                    <label>Imagem do Produto:</label>
+                    <input type="file" accept="image/*" onChange={handleImageUpload} />
                     {currentProduct.imagem_url && (
                         <div>
                             <p>Pré-visualização:</p>
-                            <img 
-                                src={`http://127.0.0.1:8000${currentProduct.imagem_url}`}
-                                alt="Pré-visualização do produto" 
-                                style={{ maxWidth: '100px', maxHeight: '100px', border: '1px solid #ddd' }} 
-                            />
-                            <p style={{ fontSize: '0.8em', color: '#555' }}>URL Relativa: {currentProduct.imagem_url}</p>
-                            <button type="button" onClick={() => setCurrentProduct(prev => ({ ...prev, imagem_url: '' }))} style={cancelButtonStyles}>Remover Imagem</button>
+                            <img src={`http://127.0.0.1:8000${currentProduct.imagem_url}`} alt="Pré-visualização" style={{ maxWidth: '100px', border: '1px solid #ddd' }} />
+                            <button type="button" onClick={() => setCurrentProduct(prev => ({ ...prev, imagem_url: '' }))}>Remover Imagem</button>
                         </div>
                     )}
                 </div>
 
-
                 <button type="submit" style={formButtonStyles}>{editingProductId ? 'Salvar Alterações' : 'Adicionar Produto'}</button>
                 {editingProductId && (
-                    <button type="button" onClick={() => {
-                        setEditingProductId(null);
-                        setCurrentProduct({
-                            nome: '', descricao: '', unidade_medida: '', preco: '',
-                            disponivel: true, em_oferta: false, preco_oferta: null, imagem_url: ''
-                        });
-                    }} style={cancelButtonStyles}>
+                    <button type="button" onClick={() => { setEditingProductId(null); setCurrentProduct({ nome: '', descricao: '', unidade_medida: '', preco: '', disponivel: true, em_oferta: false, preco_oferta: null, imagem_url: '' }); }} style={cancelButtonStyles}>
                         Cancelar Edição
                     </button>
                 )}
-                {successMessage && <p style={{ color: 'green', marginTop: '10px' }}>{successMessage}</p>}
-                {error && <p style={{ color: 'red', marginTop: '10px' }}>{error}</p>}
+                {successMessage && <p style={{ color: 'green' }}>{successMessage}</p>}
+                {error && <p style={{ color: 'red' }}>{error}</p>}
             </form>
 
-
             <h3>Meus Produtos no Catálogo</h3>
-            
-            <div style={{ marginBottom: '20px', padding: '10px', border: '1px solid #eee', borderRadius: '5px', display: 'flex', gap: '10px' }}>
-                <input
-                    type="text"
-                    placeholder="Buscar por nome ou descrição..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    style={{ flex: 1, padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
-                />
-                <select value={availabilityFilter} onChange={(e) => setAvailabilityFilter(e.target.value)} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}>
-                    <option value="all">Todos os Produtos</option>
+            <div style={{ marginBottom: '20px' }}>
+                <input type="text" placeholder="Buscar por nome..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                <select value={availabilityFilter} onChange={(e) => setAvailabilityFilter(e.target.value)}>
+                    <option value="all">Todos</option>
                     <option value="true">Disponíveis</option>
                     <option value="false">Indisponíveis</option>
                 </select>
             </div>
-
 
             {produtos.length === 0 ? (
                 <p>Nenhum produto encontrado.</p>
             ) : (
                 <ul style={productListStyles}>
                     {produtos.map(product => (
-                        <ProductCard // <-- AQUI USAMOS O NOVO COMPONENTE
+                        <ProductCard
                             key={product.id}
                             product={product}
-                            showAdminButtons={true} // Mostrar botões de edição/deleção
+                            showAdminButtons={true}
                             onEdit={handleEditClick}
                             onDelete={handleDeleteProduct}
+                            // --- CORREÇÃO AQUI ---
+                            // Passando a função para o componente ProductCard
+                            onToggleAvailability={handleToggleAvailability}
                         />
                     ))}
                 </ul>

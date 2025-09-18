@@ -37,3 +37,6 @@ class ProductResponse(BaseModel):
     nome_fornecedor: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+class ProductAvailabilityUpdate(BaseModel):
+    disponivel: bool

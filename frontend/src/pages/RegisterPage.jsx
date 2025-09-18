@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import api from '../api'; // Supondo que 'api' é sua instância do Axios
+// CORREÇÃO: Usando 'apiClient' para manter a consistência com o resto do projeto
+import apiClient from '../api/apiClient';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
@@ -28,12 +29,13 @@ function RegisterPage() {
     const [nomeCompleto, setNomeCompleto] = useState('');
     const [nomeCondominio, setNomeCondominio] = useState('');
 
-    // --- ESTADOS PARA O ENDEREÇO DO FORNECEDOR ---
+    // Estados para o endereço do fornecedor
     const [rua, setRua] = useState('');
     const [numero, setNumero] = useState('');
     const [cidade, setCidade] = useState('');
     const [estado, setEstado] = useState('');
     const [cep, setCep] = useState('');
+    const [bairro, setBairro] = useState(''); // Campo que estava faltando
 
     const [error, setError] = useState('');
     const [successMessage, setSuccessMessage] = useState('');
@@ -69,7 +71,7 @@ function RegisterPage() {
         setEmail('');
         setPassword('');
         setConfirmPassword('');
-        setAccountType('SINDICO'); // Reseta para o default
+        setAccountType('SINDICO');
         setNomeEmpresa('');
         setNomeCompleto('');
         setNomeCondominio('');
@@ -78,9 +80,9 @@ function RegisterPage() {
         setCidade('');
         setEstado('');
         setCep('');
+        setBairro('');
         setError('');
         setSuccessMessage('');
-        // Reseta os requisitos de senha
         setPasswordReqs({
             length: { text: 'Pelo menos 9 caracteres', valid: false },
             upper: { text: 'Pelo menos 1 letra maiúscula (A-Z)', valid: false },
@@ -116,29 +118,27 @@ function RegisterPage() {
             nome_condominio: accountType === 'SINDICO' ? nomeCondominio : null,
             rua: accountType === 'FORNECEDOR' ? rua : null,
             numero: accountType === 'FORNECEDOR' ? numero : null,
+            bairro: accountType === 'FORNECEDOR' ? bairro : null,
             cidade: accountType === 'FORNECEDOR' ? cidade : null,
             estado: accountType === 'FORNECEDOR' ? estado : null,
             cep: accountType === 'FORNECEDOR' ? cep : null,
         };
 
-        // --- ADICIONE ESTA LINHA PARA LOGAR O PAYLOAD ---
-        console.log("Payload de registro enviado:", userData);
-
         try {
-            await api.post('/auth/register', userData);
+            // Passo 1: Enviar para a rota de registro
+            await apiClient.post('/auth/register', userData);
             setSuccessMessage('Conta criada com sucesso! Realizando login...');
 
-            const formData = new URLSearchParams();
-            formData.append('username', username);
-            formData.append('password', password);
-
-            const loginResponse = await api.post('/auth/login', formData, {
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            // CORREÇÃO: Passo 2: Fazer login automático enviando JSON
+            const loginResponse = await apiClient.post('/auth/login', {
+                username: username,
+                password: password,
             });
             
             const { access_token, profile } = loginResponse.data;
 
-            login({ access: access_token }, profile);
+            // CORREÇÃO: Chamar a função 'login' do contexto com a assinatura correta
+            await login(access_token, profile);
 
             switch (profile.tipo_usuario) {
                 case 'SINDICO': navigate('/sindico'); break;
@@ -152,28 +152,19 @@ function RegisterPage() {
         } catch (err) {
             let errorMessage = 'Erro ao criar conta ou fazer login. Tente novamente.';
             if (err.response) {
-                // O servidor respondeu com um status code fora da faixa 2xx
-                console.error("Erro da API:", err.response.data); // <-- Log detalhado da resposta do backend
+                console.error("Erro da API:", err.response.data);
                 console.error("Status do erro:", err.response.status);
                 if (err.response.data?.detail) {
-                    errorMessage = `Erro: ${err.response.data.detail}`;
-                } else if (err.response.data) { // Se houver outros dados no corpo da resposta
-                    errorMessage = `Erro: ${JSON.stringify(err.response.data)}`;
-                } else {
-                    errorMessage = `Erro: Status ${err.response.status}`;
+                    const detail = err.response.data.detail;
+                    errorMessage = `Erro: ${typeof detail === 'string' ? detail : JSON.stringify(detail)}`;
                 }
             } else if (err.request) {
-                // A requisição foi feita mas não houve resposta (e.g., rede offline)
                 errorMessage = "Erro de rede: O servidor não respondeu.";
-                console.error("Erro de rede:", err.request);
             } else {
-                // Algo mais aconteceu ao configurar a requisição
                 errorMessage = `Erro: ${err.message}`;
-                console.error("Erro Axios:", err.message);
             }
             setError(errorMessage);
             setSuccessMessage('');
-            console.error('Erro no processo de registro/login (final):', err);
         }
     };
 
@@ -194,7 +185,7 @@ function RegisterPage() {
                     type="text"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    placeholder={accountType === 'ENTREGADOR' ? 'Digite seu CPF ou RG (para login)' : 'Digite seu CNPJ (para login)'}
+                    placeholder="Nome de usuário (para login)"
                     required
                 />
                 <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Seu melhor e-mail" required />
@@ -210,9 +201,10 @@ function RegisterPage() {
                     <>
                         <input value={nomeEmpresa} onChange={(e) => setNomeEmpresa(e.target.value)} placeholder="Nome da sua Empresa" required />
                         <div style={{marginTop: '10px', border: '1px solid #ccc', padding: '10px'}}>
-                            <strong>Endereço da Loja/Ponto de Coleta</strong>
+                            <strong>Endereço da Empresa/Ponto de Coleta</strong>
                             <input value={rua} onChange={(e) => setRua(e.target.value)} placeholder="Rua / Avenida" required />
                             <input value={numero} onChange={(e) => setNumero(e.target.value)} placeholder="Número" required />
+                            <input value={bairro} onChange={(e) => setBairro(e.target.value)} placeholder="Bairro" required />
                             <input value={cidade} onChange={(e) => setCidade(e.target.value)} placeholder="Cidade" required />
                             <input value={estado} onChange={(e) => setEstado(e.target.value)} placeholder="Estado (UF)" required />
                             <input value={cep} onChange={(e) => setCep(e.target.value)} placeholder="CEP" required />
