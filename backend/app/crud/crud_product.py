@@ -14,22 +14,21 @@ def get_product_by_id_and_fornecedor(db: Session, product_id: int, fornecedor_id
 
 def get_products(
     db: Session, 
-    user: User, # Recebemos o objeto do usuário inteiro para saber seu tipo
+    user: User,
     search: Optional[str] = None, 
-    disponivel: Optional[bool] = None
+    disponivel: Optional[bool] = None,
+    em_oferta: Optional[bool] = None  # <-- 1. ADICIONE O NOVO PARÂMETRO
 ) -> List[Produto]:
     """
-    Busca produtos com lógica de negócio baseada no tipo de usuário.
-    - Carrega o fornecedor junto para otimizar a consulta (evita N+1).
+    Busca produtos com lógica de negócio baseada no tipo de usuário e filtros.
     """
-    # Otimização: Carrega o relacionamento 'fornecedor' na mesma query
     query = db.query(Produto).options(joinedload(Produto.fornecedor))
 
     if user.tipo_usuario == TipoUsuario.FORNECEDOR:
         query = query.filter(Produto.fornecedor_id == user.id)
         if disponivel is not None:
             query = query.filter(Produto.disponivel == disponivel)
-    else: # Síndicos e outros veem apenas produtos disponíveis
+    else:
         query = query.filter(Produto.disponivel == True)
 
     if search:
@@ -38,6 +37,9 @@ def get_products(
             (Produto.nome.ilike(search_pattern)) | 
             (Produto.descricao.ilike(search_pattern))
         )
+
+    if em_oferta is not None:
+        query = query.filter(Produto.em_oferta == em_oferta)
         
     return query.order_by(Produto.nome).all()
 

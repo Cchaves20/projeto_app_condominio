@@ -19,13 +19,16 @@ router = APIRouter(
 def listar_produtos(
     search: Optional[str] = Query(None),
     disponivel: Optional[bool] = Query(None),
+    em_oferta: Optional[bool] = Query(None, description="Filtrar por produtos em oferta"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
     Lista produtos com base no perfil do usuário e filtros.
     """
-    produtos = crud_product.get_products(db=db, user=current_user, search=search, disponivel=disponivel)
+    produtos = crud_product.get_products(
+        db=db, user=current_user, search=search, disponivel=disponivel, em_oferta=em_oferta
+    )
     return produtos
 
 @router.post("/", response_model=ProductResponse, status_code=status.HTTP_201_CREATED)
