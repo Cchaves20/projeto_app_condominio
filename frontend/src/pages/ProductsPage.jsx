@@ -15,90 +15,67 @@ const productListStyles = {
 };
 
 // Estilos para os botões específicos da ProductsPage
-const buttonStyles = {
-    padding: '8px 12px',
-    borderRadius: '4px',
-    cursor: 'pointer',
-    border: 'none',
-    marginRight: '10px',
-    transition: 'background-color 0.2s ease',
-    fontSize: '0.9em',
-    fontWeight: 'bold',
-};
-
-const addToCartButtonStyles = {
-    ...buttonStyles,
-    backgroundColor: '#28a745', // Verde
-    color: 'white',
-};
-
-const favoriteButtonStyles = {
-    ...buttonStyles,
-    backgroundColor: '#ffc107', // Amarelo
-    color: '#333',
-};
-
 
 function ProductsPage() {
-    const { userType } = useAuth();
+    const { userProfile } = useAuth();
     const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [successMessage, setSuccessMessage] = useState('');
-    const [favoriteProducts, setFavoriteProducts] = useState({}); // Mapeia { productId: true/false }
+    // CORREÇÃO: Usando um Set para gerenciar favoritos de forma mais eficiente
+    const [favoriteProducts, setFavoriteProducts] = useState(new Set());
     const [searchTerm, setSearchTerm] = useState('');
 
     const fetchProductsAndFavorites = useCallback(async () => {
         setLoading(true);
         setError('');
         try {
-            let queryParams = {};
-            if (searchTerm) {
-                queryParams.search = searchTerm;
-            }
-
-            const productsResponse = await apiClient.get('/produtos', { params: queryParams });
+            const productsResponse = await apiClient.get('/produtos', { 
+                params: { search: searchTerm || undefined } 
+            });
             setProducts(productsResponse.data);
 
-            if (userType === 'SINDICO') {
-                const favoritesResponse = await apiClient.get('/favoritos');
-                const favs = {};
-                // CORREÇÃO AQUI: Acessar response.data corretamente
-                if (Array.isArray(favoritesResponse.data) && favoritesResponse.data.length > 0 && favoritesResponse.data[0].produtos) {
-                    favoritesResponse.data[0].produtos.forEach(p => {
-                        favs[p.id] = true;
-                    });
-                } else if (favoritesResponse.data && favoritesResponse.data.produtos) { // Fallback, caso retorne direto o objeto
-                    favoritesResponse.data.produtos.forEach(p => {
-                        favs[p.id] = true;
-                    });
+            if (userProfile?.tipo_usuario === 'SINDICO') {
+                const favoritesResponse = await apiClient.get('/favoritos/');
+                // Simplificando a lógica para extrair os IDs dos produtos favoritos
+                if (favoritesResponse.data && Array.isArray(favoritesResponse.data.produtos)) {
+                    const favoriteIds = new Set(favoritesResponse.data.produtos.map(p => p.id));
+                    setFavoriteProducts(favoriteIds);
                 }
-                setFavoriteProducts(favs);
             }
-
         } catch (err) {
             setError('Erro ao carregar produtos ou favoritos.');
             console.error(err);
         } finally {
             setLoading(false);
         }
-    }, [userType, searchTerm]);
+    }, [userProfile?.tipo_usuario, searchTerm]);
 
     useEffect(() => {
         fetchProductsAndFavorites();
     }, [fetchProductsAndFavorites]);
 
+    // Em: frontend/src/pages/ProductsPage.jsx
 
     const handleAlternarFavorito = async (productId) => {
         setError('');
         setSuccessMessage('');
         try {
-            await apiClient.post('/favoritos/alternar_favorito/', { produto_id: productId });
-            setFavoriteProducts(prev => ({
-                ...prev,
-                [productId]: !prev[productId]
-            }));
-            setSuccessMessage(favoriteProducts[productId] ? 'Produto removido dos favoritos.' : 'Produto adicionado aos favoritos.');
+            // A chamada DEVE ser para '/favoritos/toggle/'
+            await apiClient.post('/favoritos/toggle/', { produto_id: productId });
+            
+            // Atualiza o estado local para o feedback ser instantâneo na UI
+            setFavoriteProducts(prevFavs => {
+                const newFavs = new Set(prevFavs);
+                if (newFavs.has(productId)) {
+                    newFavs.delete(productId);
+                    setSuccessMessage('Produto removido dos favoritos.');
+                } else {
+                    newFavs.add(productId);
+                    setSuccessMessage('Produto adicionado aos favoritos!');
+                }
+                return newFavs;
+            });
         } catch (err) {
             setError('Erro ao alternar favorito.');
             console.error(err);
@@ -109,8 +86,8 @@ function ProductsPage() {
         setError('');
         setSuccessMessage('');
         try {
-            await apiClient.post('/carrinhos/adicionar_item/', { produto_id: productId, quantidade: 1 });
-            setSuccessMessage('Item adicionado ao carrinho!');
+            await apiClient.post('/cart/items/', { produto_id: productId, quantidade: 1 });
+            setSuccessMessage('Item adicionado ao carrinho com sucesso!');
         } catch (err) {
             setError('Erro ao adicionar item ao carrinho.');
             console.error(err);
@@ -122,8 +99,7 @@ function ProductsPage() {
     return (
         <div>
             <h2>Catálogo de Produtos</h2>
-
-            <div style={{ marginBottom: '20px', padding: '10px', border: '1px solid #eee', borderRadius: '5px' }}>
+            <div style={{ marginBottom: '20px' }}>
                 <input
                     type="text"
                     placeholder="Buscar produtos disponíveis..."
@@ -132,30 +108,24 @@ function ProductsPage() {
                     style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
                 />
             </div>
-            {error && <p style={{ color: 'red', marginBottom: '15px' }}>{error}</p>}
-            {successMessage && <p style={{ color: 'green', marginBottom: '15px' }}>{successMessage}</p>}
+            {error && <p style={{ color: 'red' }}>{error}</p>}
+            {successMessage && <p style={{ color: 'green' }}>{successMessage}</p>}
 
             {products.length === 0 ? (
                 <p>Nenhum produto disponível no momento.</p>
             ) : (
                 <ul style={productListStyles}>
                     {products.map(product => (
+                        // --- CORREÇÃO PRINCIPAL AQUI ---
+                        // Passando as funções e o estado como props, em vez de children.
                         <ProductCard
                             key={product.id}
                             product={product}
                             showAdminButtons={false}
-                        >
-                            {userType === 'SINDICO' && (
-                                <div style={{ marginTop: '10px', display: 'flex', justifyContent: 'space-around' }}>
-                                    <button onClick={() => handleAdicionarAoCarrinho(product.id)} style={addToCartButtonStyles}>
-                                        Adicionar ao Carrinho
-                                    </button>
-                                    <button onClick={() => handleAlternarFavorito(product.id)} style={favoriteButtonStyles}>
-                                        {favoriteProducts[product.id] ? '❤️ Favorito' : '🤍 Favoritar'}
-                                    </button>
-                                </div>
-                            )}
-                        </ProductCard>
+                            onAddToCart={handleAdicionarAoCarrinho}
+                            onToggleFavorite={handleAlternarFavorito}
+                            isFavorite={favoriteProducts.has(product.id)}
+                        />
                     ))}
                 </ul>
             )}

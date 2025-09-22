@@ -30,7 +30,7 @@ const styles = {
         display: 'block',
         width: '100%',
         height: '100%',
-        objectFit: 'cover',
+        objectFit: 'contain',
     },
     productContent: {
         padding: '15px',

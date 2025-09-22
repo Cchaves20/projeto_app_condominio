@@ -1,9 +1,10 @@
 # backend/app/schemas/favorite_schema.py
 
-from pydantic import BaseModel
-
+from pydantic import BaseModel, ConfigDict
+from typing import List
+from .product import ProductResponse
 # Schema para a requisição de alternar favorito (adicionar ou remover)
-class FavoriteToggle(BaseModel):
+class FavoriteToggleRequest(BaseModel):
     produto_id: int
 
 # Schema para representar um item de produto em uma lista de favoritos (opcional, mas bom para consistência)
@@ -23,5 +24,10 @@ class FavoriteProduct(BaseModel):
         # Isso permite que o Pydantic leia dados de modelos ORM (como o SQLAlchemy)
 
 # Schema para a resposta da lista de favoritos (GET /favoritos/)
-class FavoritosResponse(BaseModel):
-    produtos: list[FavoriteProduct]
+class FavoritesResponse(BaseModel):
+    id: int
+    usuario_id: int
+    produtos: List[ProductResponse] = []
+
+    model_config = ConfigDict(from_attributes=True)
+    
