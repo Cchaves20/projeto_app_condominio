@@ -86,7 +86,7 @@ function ProductsPage() {
         setError('');
         setSuccessMessage('');
         try {
-            await apiClient.post('/cart/items/', { produto_id: productId, quantidade: 1 });
+            await apiClient.post('/carrinhos/items/', { produto_id: productId, quantidade: 1 });
             setSuccessMessage('Item adicionado ao carrinho com sucesso!');
         } catch (err) {
             setError('Erro ao adicionar item ao carrinho.');

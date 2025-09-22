@@ -1,65 +1,66 @@
 # backend/app/routes/cart.py
 
-from fastapi import APIRouter, Depends, status, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.database.connection import get_db
-from app.models.user import User, Carrinho, CarrinhoItem, Produto
-from app.dependencies import get_current_user, get_current_sindico
-
-# Vamos precisar de um schema para receber o ID do produto e a quantidade
-from pydantic import BaseModel
-
-class CartItemCreate(BaseModel):
-    produto_id: int
-    quantidade: int
+# Importações corrigidas e centralizadas
+from app.dependencies import get_db, get_current_sindico
+from app.models.user import User
+# CORREÇÃO: Importando o novo schema 'CartItemUpdate'
+from app.schemas.cart import CartResponse, CartItemCreate, CartItemUpdate
+from app.crud import crud_cart
 
 router = APIRouter(
     prefix="/carrinhos",
     tags=["Carrinhos"]
 )
 
-@router.get("/")
-def get_user_cart(current_user: User = Depends(get_current_user)):
-    # Garante que o carrinho exista
-    if not current_user.carrinho:
-        return {"itens": [], "valor_total": 0}
-    return current_user.carrinho
+@router.get("/", response_model=CartResponse)
+def read_user_cart(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_sindico)
+):
+    """Retorna o carrinho de compras do síndico logado."""
+    return crud_cart.get_or_create_cart(db, sindico_id=current_user.id)
 
-# --- NOVA ROTA ADICIONADA ---
-@router.post("/adicionar_item/", status_code=status.HTTP_201_CREATED)
-def adicionar_item_ao_carrinho(data: CartItemCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    # 1. Encontra o produto
-    produto = db.query(Produto).filter(Produto.id == data.produto_id).first()
-    if not produto:
+@router.post("/items/", response_model=CartResponse)
+def add_item_to_cart(
+    item_data: CartItemCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_sindico)
+):
+    """Adiciona um item ao carrinho do síndico logado."""
+    cart = crud_cart.add_item_to_cart(
+        db, sindico_id=current_user.id, produto_id=item_data.produto_id, quantidade=item_data.quantidade
+    )
+    if cart is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Produto não encontrado")
+    return cart
 
-    # 2. Garante que o usuário tenha um carrinho
-    carrinho_usuario = current_user.carrinho
-    if not carrinho_usuario:
-        carrinho_usuario = Carrinho(sindico_id=current_user.id)
-        db.add(carrinho_usuario)
-        db.commit()
-        db.refresh(carrinho_usuario)
+# CORREÇÃO: Removida a classe 'CartItemUpdate' daqui
+@router.patch("/items/{item_id}", response_model=CartResponse)
+def update_item_quantity(
+    item_id: int,
+    item_data: CartItemUpdate, # <-- Agora usa o schema importado
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_sindico) # <-- Corrigido para usar 'User'
+):
+    """Atualiza a quantidade de um item no carrinho."""
+    cart = crud_cart.update_cart_item_quantity(
+        db, sindico_id=current_user.id, item_id=item_id, quantidade=item_data.quantidade
+    )
+    if cart is None:
+        raise HTTPException(status_code=404, detail="Item não encontrado no carrinho")
+    return cart
 
-    # 3. Verifica se o item já está no carrinho
-    item_existente = db.query(CarrinhoItem).filter(
-        CarrinhoItem.carrinho_id == carrinho_usuario.id,
-        CarrinhoItem.produto_id == data.produto_id
-    ).first()
-
-    if item_existente:
-        # Se já existe, apenas atualiza a quantidade
-        item_existente.quantidade += data.quantidade
-    else:
-        # Se não existe, cria um novo item no carrinho
-        novo_item = CarrinhoItem(
-            carrinho_id=carrinho_usuario.id,
-            produto_id=data.produto_id,
-            quantidade=data.quantidade,
-            preco_congelado=produto.preco_oferta if produto.em_oferta else produto.preco
-        )
-        db.add(novo_item)
-    
-    db.commit()
-    return {"detail": "Item adicionado ao carrinho com sucesso!"}
+@router.delete("/items/{item_id}", response_model=CartResponse)
+def remove_item_from_cart(
+    item_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_sindico)
+):
+    """Remove um item do carrinho do síndico logado."""
+    cart = crud_cart.remove_item_from_cart(db, sindico_id=current_user.id, item_id=item_id)
+    if cart is None:
+        raise HTTPException(status_code=404, detail="Item não encontrado no carrinho")
+    return cart
