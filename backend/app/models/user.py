@@ -140,35 +140,39 @@ class Produto(Base):
 class Pedido(Base):
     __tablename__ = "pedidos"
     id = Column(Integer, primary_key=True, index=True)
-    sindico_id = Column(Integer, ForeignKey("usuarios.id"))
+    sindico_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
     entregador_id = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
     data_pedido = Column(DateTime(timezone=True), server_default=func.now())
     status = Column(String(50), default="PENDENTE")
-    valor_total = Column(Float)
-    rua = Column(String(255), nullable=True)
-    numero = Column(String(20), nullable=True)
-    cep = Column(String(9), nullable=True)
+    valor_total = Column(Float, nullable=False)
+    
+    # --- COLUNAS DE ENDEREÇO CORRIGIDAS E COMPLETAS ---
+    rua = Column(String(255), nullable=False)
+    numero = Column(String(20), nullable=False)
+    bairro = Column(String(100), nullable=False) # <-- ADICIONADA
+    cidade = Column(String(100), nullable=False) # <-- ADICIONADA
+    estado = Column(String(50), nullable=False)  # <-- ADICIONADA
+    cep = Column(String(9), nullable=False)
     complemento = Column(String(255), nullable=True)
-    codigo_confirmacao = Column(String(4), nullable=True) # Para confirmação de entrega
+    # --- FIM DA CORREÇÃO ---
 
-    # Relações com User
+    codigo_confirmacao = Column(String(4), nullable=True)
+
+    # Relações com User (já estavam corretas)
     sindico = relationship(
         "User", 
         foreign_keys=[sindico_id], 
-        back_populates="pedidos_feitos",
-        overlaps="pedidos_feitos" # Adicionado overlaps
+        back_populates="pedidos_feitos"
     )
     entregador = relationship(
         "User", 
         foreign_keys=[entregador_id], 
-        back_populates="pedidos_entregues",
-        overlaps="pedidos_entregues" # Adicionado overlaps
+        back_populates="pedidos_entregues"
     )
     
-    # Itens do pedido
+    # Itens do pedido (já estava correto)
     itens_pedido = relationship("ItemPedido", back_populates="pedido", cascade="all, delete-orphan")
-
-
+    
 class Carrinho(Base):
     __tablename__ = "carrinhos"
     id = Column(Integer, primary_key=True, index=True)

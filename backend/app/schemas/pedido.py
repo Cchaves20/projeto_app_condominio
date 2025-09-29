@@ -35,3 +35,11 @@ class Pedido(PedidoBase):
 
     model_config = ConfigDict(from_attributes=True)
     
+class PedidoCreate(BaseModel):
+    rua: str
+    numero: str
+    cep: str
+    bairro: str
+    cidade: str
+    estado: str
+    complemento: Optional[str] = None
