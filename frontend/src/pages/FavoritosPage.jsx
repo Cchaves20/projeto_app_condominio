@@ -63,7 +63,7 @@ function FavoritosPage() {
         setError('');
         setSuccessMessage('');
         try {
-            await apiClient.post('/cart/items/', { produto_id: produtoId, quantidade: 1 });
+            await apiClient.post('/carrinhos/items/', { produto_id: produtoId, quantidade: 1 });
             setSuccessMessage('Produto adicionado ao carrinho com sucesso!');
         } catch (err) {
             setError('Erro ao adicionar produto ao carrinho.');
